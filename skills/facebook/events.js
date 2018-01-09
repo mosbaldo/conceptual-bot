@@ -4,7 +4,7 @@ module.exports = function(controller) {
     // capture them, and fire special events
     controller.on('message_received', function(bot, message) {
         if (message.text) {
-            bot.reply(message, message.nlpResponse.result.fulfillment.messages[0].speech);
+            bot.reply(message, message.nlpResponse.result.fulfillment.speech);
         } else {
             if (message.sticker_id) {
                 controller.trigger('sticker_received', [bot, message]);

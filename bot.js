@@ -47,57 +47,35 @@ var controllers = [];
 var fbController = Botkit.facebookbot({
     debug: true,
     verify_token: process.env.fb_verify_token,
-    access_token: process.env.fb_page_token,
-    studio_token: process.env.studio_token,
-    studio_command_uri: process.env.studio_command_uri,
+    access_token: process.env.fb_page_token
 });
 
 var slackController = Botkit.slackbot({
     debug: true
 });
 
+require(__dirname + '/components/slack/rtm_manager.js')(slackController);
+
+slackController.trigger('rtm:start', [{
+    token: process.env.slack_token
+}]);
+
 var dialogflowMiddleware = require('botkit-middleware-dialogflow')({
-    token: process.env.dialogflow,
+    token: process.env.dialogflow_token,
 });
 
-var bot = slackController.spawn({
+/* var bot = slackController.spawn({
     token: process.env.slack_token
-});
+}); */
 
 fbController.middleware.receive.use(dialogflowMiddleware.receive);
 
 slackController.middleware.receive.use(dialogflowMiddleware.receive);
 
-bot.startRTM();
-
-// Log every message sent
-slackController.middleware.send.use(function(bot, message, next) {
-    // log it
-    console.log('SENT: ', message);
-    // modify the message
-    message.logged = true;
-    // continue processing the message
-    next();
-  });
-  
-  // Log every message recieved
-  slackController.middleware.receive.use(function(bot, message, next) {
-    // log it
-    console.log('RECEIVED: ', message);
-    // modify the message
-    message.logged = true;
-    // continue processing the message
-    next();
-  });
-  
-
-var normalizedPathS = require("path").join(__dirname, "skills/slack");
-require("fs").readdirSync(normalizedPathS).forEach(function(file) {
-  require("./skills/slack/" + file)(slackController);
-});
+// bot.startRTM();
 
 // Set up an Express-powered webserver to expose oauth and webhook endpoints
-var facebookWebserver = require(__dirname + '/components/express_webserver.js')(fbController);
+var webserver = require(__dirname + '/components/express_webserver.js')(fbController, slackController);
 
 // Tell Facebook to start sending events to this application
 require(__dirname + '/components/facebook/subscribe_events.js')(fbController);
@@ -108,24 +86,29 @@ require(__dirname + '/components/facebook/thread_settings.js')(fbController);
 // Send an onboarding message when a user activates the bot
 require(__dirname + '/components/facebook/onboarding.js')(fbController);
 
-// Load in some helpers that make running Botkit on Glitch.com better
-require(__dirname + '/components/facebook/plugin_glitch.js')(fbController);
+// Set up a simple storage backend for keeping a record of customers
+// who sign up for the app via the oauth
+require(__dirname + '/components/slack/user_registration.js')(slackController);
 
-// enable advanced botkit studio metrics
-require('botkit-studio-metrics')(fbController);
+// Send an onboarding message when a new team joins
+require(__dirname + '/components/slack/onboarding.js')(slackController);
 
 var normalizedPathFb = require("path").join(__dirname, "skills/facebook");
 require("fs").readdirSync(normalizedPathFb).forEach(function(file) {
   require("./skills/facebook/" + file)(fbController);
 });
 
+var normalizedPathS = require("path").join(__dirname, "skills/slack");
+require("fs").readdirSync(normalizedPathS).forEach(function(file) {
+  require("./skills/slack/" + file)(slackController);
+});
+
 function fb_usage_tip() {
     console.log('~~~~~~~~~~');
-    console.log('Botkit Studio Starter Kit');
+    console.log('Botkit Starter Kit');
     console.log('Execute your bot application like this:');
-    console.log('fb_page_token=<MY PAGE TOKEN> verify_token=<MY VERIFY TOKEN> studio_token=<MY BOTKIT STUDIO TOKEN> node bot.js');
+    console.log('fb_page_token=<MY PAGE TOKEN> verify_token=<MY VERIFY TOKEN> node bot.js');
     console.log('Get Facebook token here: https://developers.facebook.com/docs/messenger-platform/implementation')
-    console.log('Get a Botkit Studio token here: https://studio.botkit.ai/')
     console.log('~~~~~~~~~~');
 }
 
@@ -133,8 +116,7 @@ function slack_usage_tip() {
     console.log('~~~~~~~~~~');
     console.log('Botkit Starter Kit');
     console.log('Execute your bot application like this:');
-    console.log('clientId=<MY SLACK CLIENT ID> clientSecret=<MY CLIENT SECRET> PORT=3000 studio_token=<MY BOTKIT STUDIO TOKEN> node bot.js');
+    console.log('clientId=<MY SLACK CLIENT ID> clientSecret=<MY CLIENT SECRET> PORT=3000 node bot.js');
     console.log('Get Slack app credentials here: https://api.slack.com/apps')
-    console.log('Get a Botkit Studio token here: https://studio.botkit.ai/')
     console.log('~~~~~~~~~~');
 }
